@@ -1,128 +1,226 @@
-## MKTG 580: Marketing Aanlytics Fundamentals
-## Conjoint Analysis
+## Forte Hotel Conjoint Analysis Case Study
 
-###############
-## Project Forte Hotel ##
-## Full profiles: Total 216 profiles (3 x 3 x 3 x 4 x 2)
-## Using Fractional Factorial Design: Reducing the number of profiles to evaluate
-## But, profles (bundles) are already provided in the data set (Forte Hotel Data (Conjoint, 1 Ratings).xls)
-## So, we don't need to create factorial design, but need to make sure that profiles correctly reflect the data
-###############
+############################################################
+## Project Overview
+## Marketing problem: understand which hotel attributes drive preference,
+## identify distinct respondent segments, and compare simulated hotel offers.
+## Marketing objective: translate conjoint outputs into actionable positioning,
+## pricing, and product-design recommendations for Forte Hotel.
+############################################################
 
-library(conjoint)
+suppressPackageStartupMessages({
+    library(conjoint)
+    library(fpc)
+    library(broom)
+    library(ggplot2)
+})
 
-# Declare five variables: room, amenity, leisure, extras and delivery
-# Include levels of attributes
-hotel<-expand.grid(room=c("small suite","large room","room office"),amenity=c("internet","speaker phone", "room fax"),
-                     leisure=c("exercise room","pool", "exercise + pool"),
-                     extras=c("shoe shine","tape library","fruit cheese","newspaper"),
-                     delivery=c("yes", "no"))
-hotel
-dim(hotel)
+############################################################
+## 1) Data understanding and design reference
+## The study uses the profiles already supplied in the project files.
+## The full attribute space contains 216 possible hotel concepts, but the
+## customer ratings were collected on the provided profile set rather than by
+## generating new data.
+############################################################
 
-####################### NO need to do this for our project
-# Fractional Factorial Design: Very Important #########
-journeyfactdesign<-caFactorialDesign(data=hotel,type="fractional") 
-journeyfactdesign<-caFactorialDesign(data=hotel,type="orthogonal") 
-journeyfactdesign
+hotel_attributes <- expand.grid(
+    room = c("small suite", "large room", "room office"),
+    amenity = c("internet", "speaker phone", "room fax"),
+    leisure = c("exercise room", "pool", "exercise + pool"),
+    extras = c("shoe shine", "tape library", "fruit cheese", "newspaper"),
+    delivery = c("yes", "no"),
+    stringsAsFactors = FALSE
+)
 
-## encoding variable levels of the fractional design
-prof=caEncodedDesign(design=journeyfactdesign) 
-prof 
-###########################
+full_factorial_design <- caFactorialDesign(data = hotel_attributes, type = "orthogonal")
+encoded_design <- caEncodedDesign(design = full_factorial_design)
 
-### Questionnaire Develpment and DATA Collection#########################
-### Using the above profiles, you can develop a questionnaire
-### Collect Data 
-### Input format: (1) using semi colon (2) comma separate value, (3) etc
-#########################################################################
+preferences <- read.csv("forte_preferences.csv", header = TRUE, check.names = FALSE)
+profiles <- read.csv("forte_profiles.csv", header = TRUE)
+levelnames <- read.csv("forte_levels.csv", header = TRUE)
+simulation1 <- read.csv("forte_simulation1.csv", header = TRUE)
+simulation2 <- read.csv("forte_simulation2.csv", header = TRUE)
 
-# data loading
-# colon separated data: using read.csv2
-# comma and tab separated data: using read.csv
-# Make sure that the following excel files are ready for loading
+cat("\n--- Data Structure ---\n")
+cat("preferences:", nrow(preferences), "respondents x", ncol(preferences), "profiles\n")
+cat("profiles:", nrow(profiles), "rated profiles x", ncol(profiles), "attributes\n")
+cat("level names:", nrow(levelnames), "rows\n")
+cat("simulation 1:", nrow(simulation1), "candidate profiles\n")
+cat("simulation 2:", nrow(simulation2), "candidate profiles\n")
 
-## I copied and pasted data from Forte Hotel Conjoint excel files to new excel files 
-## and save each as a csv file, respectively:
-## (1) forte_preferences.csv  (2) forte_profiles.csv (3) forte_levels.csv
-## (4) forte_simulation1.csv  (5) forte_simulation2.csv
-  
+############################################################
+## 2) Data preparation
+## The goal here is to confirm that the preference matrix and the profile
+## design align before estimating utilities. This step ensures the conjoint
+## model is built on the same profile structure used in the survey.
+############################################################
 
-preferences=read.csv("forte_preferences.csv", header=TRUE) 
-profiles=read.csv("forte_profiles.csv", header=TRUE) 
-levelnames=read.csv("forte_levels.csv", header=TRUE) 
-simulation1=read.csv("forte_simulation1.csv", header=TRUE)  # for exiting hotels
-simulation2=read.csv("forte_simulation2.csv", header=TRUE)  # for new hotels being considered
+stopifnot(ncol(preferences) == nrow(profiles))
+stopifnot(all(colnames(profiles) == colnames(simulation1)))
+stopifnot(all(colnames(profiles) == colnames(simulation2)))
 
-preferences
-profiles 
-levelnames
-simulation1
-simulation2
+############################################################
+## 3) Estimating conjoint utilities
+## Part-worth utilities quantify how each attribute level contributes to
+## preference. Total utilities show the overall appeal of each profile.
+############################################################
 
-dim(preferences)
-dim(profiles)
-dim(levelnames)
-dim(simulation1)
-dim(simulation2)
+part_utilities <- caPartUtilities(y = preferences, x = profiles, z = levelnames)
+total_utilities <- caTotalUtilities(y = preferences, x = profiles)
 
-# Measurement of part-worths utilities (all respondents): 
-partutilities=caPartUtilities(y=preferences,x=profiles,z=levelnames) 
-print(head(partutilities))
+cat("\n--- Part-Worth Utilities (first 6 respondents) ---\n")
+print(head(part_utilities))
 
-# Measurement of total utilities (all respondents):
-totalutilities=caTotalUtilities(y=preferences,x=profiles) 
-print(head(totalutilities)) 
+cat("\n--- Total Utilities (first 6 respondents) ---\n")
+print(head(total_utilities))
 
-# Determining the relative importance of features (for the respondent No.26, Nissa):
-importance=caImportance(y=preferences[26,],x=profiles) 
-print(importance)
+############################################################
+## Marketing interpretation
+## Use the part-worth table to identify which levels raise utility and which
+## levels lower it. Positive values indicate stronger preference, while
+## negative values indicate weaker appeal relative to the respondent's average.
+############################################################
 
-# Using the Conjoint function for the respondent No. 26
-Conjoint(preferences[26,],profiles,levelnames) 
+############################################################
+## 4) Respondent-level importance and profile explanation
+## A single respondent's importance scores are included to illustrate how the
+## model translates into attribute-level trade-offs.
+############################################################
 
+respondent_id <- 26
+importance_26 <- caImportance(y = preferences[respondent_id, ], x = profiles)
 
-# # Using the Conjoint function for all respondents
-Conjoint(y=preferences,x=profiles,z=levelnames)
- 
+cat("\n--- Attribute Importance for Respondent 26 ---\n")
+print(importance_26)
 
+cat("\n--- Conjoint Summary for Respondent 26 ---\n")
+Conjoint(preferences[respondent_id, ], profiles, levelnames)
 
-### ---------------------------
-### Segmentation of respondents
-### ---------------------------
+cat("\n--- Conjoint Summary for All Respondents ---\n")
+Conjoint(y = preferences, x = profiles, z = levelnames)
 
-### Segmentation using k-means method - the default division into 2 segments: 
+############################################################
+## 5) Respondent segmentation
+## Segmentation identifies groups with different preference structures. That
+## helps translate one aggregate conjoint study into differentiated marketing
+## actions for distinct customer types.
+############################################################
 
-segments<-caSegmentation(preferences,profiles) 
-print(segments$seg) 
+segments_2 <- caSegmentation(preferences, profiles)
+segments_3 <- caSegmentation(preferences, profiles, c = 3)
 
+cat("\n--- Two-Segment Solution ---\n")
+print(segments_2$seg)
 
-### Segmentation using k-means method - division into 3 segments:
-segments<-caSegmentation(preferences,profiles,c=3) 
-print(segments$seg)
+cat("\n--- Three-Segment Solution ---\n")
+print(segments_3$seg)
 
-## Visualization of the division into 2 segments: 
+cat("\n--- Segmentation Summary ---\n")
+summary(segments_3)
 
-summary(segments)
-require(fpc)  
-plotcluster(segments$util,segments$sclu) 
+if (interactive()) {
+    plotcluster(segments_3$util, segments_3$sclu)
 
-require(fpc) 
-require(broom) 
-require(ggplot2) 
-dcf<-discrcoord(segments$util,segments$sclu) 
-assignments<-augment(segments$segm,dcf$proj[,1:2]) 
-ggplot(assignments)+geom_point(aes(x=X1,y=X2,color= .cluster))+labs(color="Cluster Assignment",title="K-Means Clustering Results")
+    discrim_coordinates <- discrcoord(segments_3$util, segments_3$sclu)
+    segment_assignments <- augment(segments_3$segm, discrim_coordinates$proj[, 1:2])
 
+    ggplot(segment_assignments) +
+        geom_point(aes(x = X1, y = X2, color = .cluster)) +
+        labs(
+            color = "Cluster Assignment",
+            title = "K-Means Clustering Results"
+        )
+}
 
-### Market share analysis of simulation profiles
-### using maximum utility model, BTL probability model (Bradley-Terry-Luce Model) and logit model:
+############################################################
+## 6) Simulation utilities and market share modeling
+## The original project included candidate hotel concepts for existing and
+## proposed offers. The script first attempts the package simulation tools and
+## then falls back to a manual logit calculation if the package routine is not
+## conformable for the supplied simulation files.
+############################################################
 
-ShowAllSimulations(sym=simulation1,y=preferences,x=profiles)
-ShowAllSimulations(sym=simulation2,y=preferences,x=profiles)
-caLogit(simulation1, preferences, profiles)
+estimate_profile_utilities <- function(part_utilities_matrix, candidate_profiles) {
+    respondent_count <- nrow(part_utilities_matrix)
+    candidate_count <- nrow(candidate_profiles)
+    utility_matrix <- matrix(part_utilities_matrix[, "intercept"], nrow = respondent_count, ncol = candidate_count)
 
-# End
+    attribute_to_levels <- list(
+        room = colnames(part_utilities_matrix)[2:4],
+        amenity = colnames(part_utilities_matrix)[5:7],
+        leisure = colnames(part_utilities_matrix)[8:10],
+        extras = colnames(part_utilities_matrix)[11:14],
+        delivery = colnames(part_utilities_matrix)[15:16]
+    )
+
+    for (attribute_name in names(attribute_to_levels)) {
+        level_names <- attribute_to_levels[[attribute_name]]
+        profile_levels <- candidate_profiles[[attribute_name]]
+        for (profile_index in seq_len(candidate_count)) {
+            level_index <- profile_levels[profile_index]
+            utility_matrix[, profile_index] <- utility_matrix[, profile_index] +
+                part_utilities_matrix[, level_names[level_index]]
+        }
+    }
+
+    utility_matrix
+}
+
+estimate_logit_shares <- function(profile_utilities) {
+    stable_utilities <- profile_utilities - apply(profile_utilities, 1, max)
+    exp_utilities <- exp(stable_utilities)
+    respondent_probabilities <- exp_utilities / rowSums(exp_utilities)
+    colMeans(respondent_probabilities)
+}
+
+run_simulation_share <- function(candidate_profiles, label) {
+    cat("\n---", label, "---\n")
+
+    native_result <- tryCatch(
+        {
+            ShowAllSimulations(sym = candidate_profiles, y = preferences, x = profiles)
+            caLogit(candidate_profiles, preferences, profiles)
+        },
+        error = function(e) NULL
+    )
+
+    if (!is.null(native_result)) {
+        print(native_result)
+    } else {
+        cat("Package simulation helpers were not conformable for this candidate set; using a manual logit share estimate.\n")
+    }
+
+    candidate_utilities <- estimate_profile_utilities(part_utilities, candidate_profiles)
+    share_estimate <- estimate_logit_shares(candidate_utilities)
+    share_table <- data.frame(
+        profile = paste0("Profile ", seq_along(share_estimate)),
+        logit_share = round(share_estimate, 4)
+    )
+    share_table <- share_table[order(share_table$logit_share, decreasing = TRUE), ]
+
+    print(share_table)
+    invisible(share_table)
+}
+
+simulation1_shares <- run_simulation_share(simulation1, "Simulation 1 Market Share")
+simulation2_shares <- run_simulation_share(simulation2, "Simulation 2 Market Share")
+
+############################################################
+## Marketing interpretation
+## Compare the ranked shares to identify the strongest concept in each
+## simulation set. The leading profile is the most attractive offer under the
+## logit share model, while lower-ranked concepts indicate weaker positioning.
+############################################################
+
+############################################################
+## 7) Conclusion
+## The conjoint results support a portfolio-ready marketing recommendation:
+## identify the most valuable attribute combinations, tailor offers to the key
+## respondent segments, and use the simulation results to refine the hotel
+## concept before launch.
+############################################################
+
+cat("\n--- End of Conjoint Analysis ---\n")
 
 
 
