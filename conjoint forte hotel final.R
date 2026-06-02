@@ -219,9 +219,3 @@ simulation2_shares <- run_simulation_share(simulation2, "Simulation 2 Market Sha
 ## respondent segments, and use the simulation results to refine the hotel
 ## concept before launch.
 ############################################################
-
-cat("\n--- End of Conjoint Analysis ---\n")
-
-
-
-
